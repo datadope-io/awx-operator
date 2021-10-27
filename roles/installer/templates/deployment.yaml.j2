@@ -74,10 +74,20 @@ spec:
         - image: '{{ _redis_image }}'
           imagePullPolicy: '{{ image_pull_policy }}'
           name: redis
-{% if redis_capabilities is defined and redis_capabilities %}
+{% if redis_capabilities is defined or redis_security_contexts is defined %}
           securityContext:
+{% if redis_security_contexts is defined %}
+{% if 'run_as_group' in redis_security_contexts %}
+            runAsGroup: {{ redis_security_contexts.run_as_group }}
+{% endif %}
+{% if 'run_as_user' in redis_security_contexts %}
+            runAsUser: {{ redis_security_contexts.run_as_user }}
+{% endif %}
+{% endif %}
+{% if redis_capabilities is defined %}
             capabilities:
               add: {{ redis_capabilities }}
+{% endif %}
 {% endif %}
           args: ["redis-server", "/etc/redis.conf"]
           volumeMounts:

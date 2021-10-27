@@ -295,6 +295,14 @@ spec:
                 redis_image_version:
                   description: Redis container image version to use
                   type: string
+                redis_security_contexts:
+                  description: Redis container security contexts
+                  properties:
+                    runAsGroup:
+                      type: integer
+                    runAsUser:
+                      type: integer
+                  type: object
                 redis_capabilities:
                   description: Redis container capabilities
                   type: array

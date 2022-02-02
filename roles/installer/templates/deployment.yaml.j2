@@ -7,7 +7,7 @@ metadata:
   namespace: '{{ ansible_operator_meta.namespace }}'
   labels:
     app.kubernetes.io/name: '{{ ansible_operator_meta.name }}'
-    app.kubernetes.io/version: '{{ _image_version }}'
+    app.kubernetes.io/version: '{{ _image.split(':')[-1] | truncate(63, True, '') }}'
     app.kubernetes.io/part-of: '{{ ansible_operator_meta.name }}'
     app.kubernetes.io/managed-by: '{{ deployment_type }}-operator'
     app.kubernetes.io/component: '{{ deployment_type }}'
@@ -23,7 +23,7 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: '{{ ansible_operator_meta.name }}'
-        app.kubernetes.io/version: '{{ _image_version }}'
+        app.kubernetes.io/version: '{{ _image.split(':')[-1] | truncate(63, True, '') }}'
         app.kubernetes.io/part-of: '{{ ansible_operator_meta.name }}'
         app.kubernetes.io/managed-by: '{{ deployment_type }}-operator'
         app.kubernetes.io/component: '{{ deployment_type }}'
@@ -35,6 +35,22 @@ spec:
 {% endif %}
 {% if bundle_ca_crt or projects_persistence|bool or init_container_extra_commands %}
       initContainers:
+        - name: database-check
+          image: '{{ _init_container_image }}'
+          imagePullPolicy: '{{ image_pull_policy }}'
+          command:
+            - /bin/sh
+            - -c
+            - |
+              [[ -d /check-db/pgsql/data ]] && rm -rf /check-db/data; mv /check-db/pgsql/data/ /check-db/data/ && rm -rf /check-db/pgsql
+          volumeMounts:
+            - name: check-db-pvc
+              mountPath: /check-db
+              subPath: ''
+            volumes:
+            - name: check-db-pvc
+            persistentVolumeClaim:
+              claimName: postgres-{{ ansible_operator_meta.name }}-postgres-0
         - name: init
           image: '{{ _init_container_image }}'
           imagePullPolicy: '{{ image_pull_policy }}'
@@ -316,13 +332,22 @@ spec:
       nodeSelector:
         {{ node_selector | indent(width=8) }}
 {% endif %}
+{% if topology_spread_constraints %}
+      topologySpreadConstraints:
+        {{ topology_spread_constraints | indent(width=8) }}
+{% endif %}
 {% if tolerations %}
       tolerations:
         {{ tolerations | indent(width=8) }}
 {% endif %}
-{% if projects_persistence|bool %}
+{% if projects_persistence|bool or (security_context_settings|length) %}
       securityContext:
+{% if projects_persistence|bool %}
         fsGroup: 1000
+{% endif %}
+{% if security_context_settings|length %}
+        {{ security_context_settings | to_nice_yaml | indent(8) }}
+{% endif %}
 {% endif %}
       volumes:
 {% if bundle_ca_crt %}
